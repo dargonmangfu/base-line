@@ -1,23 +1,22 @@
 import torch
 import torch.nn as nn
 
-
 class BasicBlock(nn.Module):
     expansion = 1
 
     def __init__(self, in_channels, out_channels, stride=1):
         super(BasicBlock, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(out_channels)
-        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(out_channels)
+        self.conv1 = nn.Conv1d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm1d(out_channels)
+        self.conv2 = nn.Conv1d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm1d(out_channels)
         self.relu = nn.ReLU(inplace=True)
         
         self.shortcut = nn.Sequential()
         if stride != 1 or in_channels != out_channels:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(out_channels)
+                nn.Conv1d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm1d(out_channels)
             )
 
     def forward(self, x):
@@ -27,19 +26,20 @@ class BasicBlock(nn.Module):
         out += identity
         return self.relu(out)
 
-
 class ResNet(nn.Module):
-    def __init__(self, block, num_blocks, num_classes=10):
+    def __init__(self, block, num_blocks, input_channels=3, seq_length=32, num_classes=10):
         super(ResNet, self).__init__()
         self.in_channels = 16
-        self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(16)
+        self.conv1 = nn.Conv1d(input_channels, 16, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm1d(16)
         self.relu = nn.ReLU(inplace=True)
         self.layer1 = self._make_layer(block, 16, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, 32, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2)
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(64, num_classes)
+        
+        self.seq_length = seq_length // 4 
+        self.avgpool = nn.AdaptiveAvgPool1d(self.seq_length)
+        self.fc = nn.Linear(64 * self.seq_length, num_classes)
 
     def _make_layer(self, block, out_channels, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)
@@ -59,20 +59,14 @@ class ResNet(nn.Module):
         x = self.fc(x)
         return x
 
-
-class ResNet32(nn.Module):
-    """自定义的ResNet-32模型（总层数=32）"""
-    def __init__(self, num_classes=10):
-        super(ResNet32, self).__init__()
-        self.resnet = ResNet(BasicBlock, [5, 5, 5], num_classes)
-    
-    def forward(self, x):
-        return self.resnet(x)
+def ResNet32_1d(input_channels=3, seq_length=32, num_classes=10):
+    """创建自定义的ResNet-32模型"""
+    return ResNet(BasicBlock, [5, 5, 5], input_channels, seq_length, num_classes)    
 
 
-class BiLSTMClassifier(nn.Module):
+class BiLSTM(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, num_classes):
-        super(BiLSTMClassifier, self).__init__()
+        super(BiLSTM, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         
