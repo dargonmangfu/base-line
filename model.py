@@ -70,12 +70,35 @@ class ResNet32(nn.Module):
         return self.resnet(x)
 
 
-class BiLSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers=1, dropout=0.0):
-        super(BiLSTM, self).__init__()
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers=num_layers, dropout=dropout, bidirectional=True)
+import torch
+import torch.nn as nn
 
+class BiLSTMClassifier(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, num_classes):
+        super(BiLSTMClassifier, self).__init__()
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        
+        # BiLSTM
+        self.lstm = nn.LSTM(
+            input_size, hidden_size, num_layers, 
+            batch_first=True, bidirectional=True
+        )
+        
+        # 全连接层
+        self.fc = nn.Linear(hidden_size * 2, num_classes)  # *2 因为双向
+        
     def forward(self, x):
-        # x shape: (seq_len, batch, input_size)
-        output, (hn, cn) = self.lstm(x)
-        return output
+        # x shape: (batch, 1, 28, 28) -> (batch, 28, 28)
+        x = x.squeeze(1)  # 移除通道维度
+        
+        # 初始化隐藏状态
+        h0 = torch.zeros(self.num_layers * 2, x.size(0), self.hidden_size).to(x.device)
+        c0 = torch.zeros(self.num_layers * 2, x.size(0), self.hidden_size).to(x.device)
+        
+        # 前向传播BiLSTM
+        out, _ = self.lstm(x, (h0, c0))  # out: (batch_size, seq_length, hidden_size*2)
+        
+        # 取最后一个时间步的输出
+        out = self.fc(out[:, -1, :])
+        return out
