@@ -70,9 +70,6 @@ class ResNet32(nn.Module):
         return self.resnet(x)
 
 
-import torch
-import torch.nn as nn
-
 class BiLSTMClassifier(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, num_classes):
         super(BiLSTMClassifier, self).__init__()
