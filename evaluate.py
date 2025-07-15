@@ -50,7 +50,7 @@ def compute_metrics(y_true, y_pred):
     }
 
 def plot_confusion_matrix(y_true, y_pred, save_path=None, model_type=None, dataset_name=None, 
-                         training_ratio=None, rho=None, train_pos_count=None, train_neg_count=None,
+                         rho=None, train_pos_count=None, train_neg_count=None,
                          test_pos_count=None, test_neg_count=None):
     """绘制混淆矩阵"""
     cm = confusion_matrix(y_true, y_pred)
@@ -73,8 +73,6 @@ def plot_confusion_matrix(y_true, y_pred, save_path=None, model_type=None, datas
     # 添加详细信息
     if dataset_name:
         title_parts.append(f'Dataset: {dataset_name}')
-    if training_ratio is not None:
-        title_parts.append(f'Training Ratio: {training_ratio}')
     if rho is not None:
         title_parts.append(f'Imbalance Ratio (rho): {rho}')
     
@@ -99,7 +97,8 @@ def plot_confusion_matrix(y_true, y_pred, save_path=None, model_type=None, datas
     # 关闭图形以释放内存，不显示窗口
     plt.close()
 
-def evaluate_model(model, test_loader, save_dir='./', dataset_name=None, training_ratio=None, rho=None, dataset_obj=None, run_number=None, model_type=None, is_validation=False):
+def evaluate_model(model, test_loader, save_dir='./', dataset_name=None, rho=None, 
+                  dataset_obj=None, run_number=None, model_type=None, is_validation=False, is_final=False):
     """
     评估模型性能并计算相关指标
     
@@ -108,12 +107,12 @@ def evaluate_model(model, test_loader, save_dir='./', dataset_name=None, trainin
         test_loader: 测试数据加载器
         save_dir: 保存结果的目录
         dataset_name: 数据集名称
-        training_ratio: 训练完成比例
         rho: 不平衡率
         dataset_obj: 数据集对象，用于获取样本数量统计
         run_number: 运行次数编号，用于文件命名
         model_type: 模型类型名称
         is_validation: 是否是验证集评估
+        is_final: 是否是最终评估(只有最终评估才保存混淆矩阵)
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -175,8 +174,8 @@ def evaluate_model(model, test_loader, save_dir='./', dataset_name=None, trainin
     print(f"宏平均F1-score: {metrics['f1_macro']:.4f}")
     print(f"G-mean: {metrics['g_mean']:.4f}")
     
-    # 如果是验证集评估，不保存结果和混淆矩阵
-    if is_validation:
+    # 如果是验证集评估或非最终评估，不保存结果和混淆矩阵
+    if is_validation or (save_dir is None):
         return metrics
     
     # 创建保存目录
@@ -208,7 +207,6 @@ def evaluate_model(model, test_loader, save_dir='./', dataset_name=None, trainin
         '评估时间': [current_time],
         '数据集名称': [dataset_name if dataset_name else 'Unknown'],
         '模型类型': [model_type if model_type else 'Unknown'],
-        '训练完成比例': [training_ratio if training_ratio is not None else 'Unknown'],
         '不平衡率rho': [rho if rho is not None else 'Unknown'],
         '训练集正类样本数': [train_positive_count],
         '训练集负类样本数': [train_negative_count],
@@ -250,19 +248,21 @@ def evaluate_model(model, test_loader, save_dir='./', dataset_name=None, trainin
     except Exception as e:
         print(f"保存Excel文件时出错: {e}")
     
-    # 绘制混淆矩阵
-    # 生成带数据集名称、模型类型、不平衡率、训练完成比例和序号的文件名
-    dataset_str = dataset_name if dataset_name else 'Unknown'
-    model_str = model_type if model_type else 'Unknown'
-    rho_str = f"rho{rho}" if rho is not None else 'rhoUnknown'
-    ratio_str = f"{training_ratio}" if training_ratio is not None else 'Unknown'
+    # 只在最终评估时绘制混淆矩阵
+    if is_final:
+        # 生成带数据集名称、模型类型、不平衡率和序号的文件名
+        dataset_str = dataset_name if dataset_name else 'Unknown'
+        model_str = model_type if model_type else 'Unknown'
+        rho_str = f"rho{rho}" if rho is not None else 'rhoUnknown'
+        
+        cm_filename = f'{dataset_str}_{model_str}_{rho_str}_第{run_number}次.png'
+        cm_path = os.path.join(save_dir, cm_filename)
+        
+        plot_confusion_matrix(all_labels, all_preds, save_path=cm_path, model_type=model_type,
+                             dataset_name=dataset_name, rho=rho,
+                             train_pos_count=train_positive_count, train_neg_count=train_negative_count,
+                             test_pos_count=test_positive_count, test_neg_count=test_negative_count)
     
-    cm_filename = f'{dataset_str}_{model_str}_{rho_str}_训练完成比{ratio_str}_第{run_number}次.png'
-    cm_path = os.path.join(save_dir, cm_filename)
-    
-    plot_confusion_matrix(all_labels, all_preds, save_path=cm_path, model_type=model_type,
-                         dataset_name=dataset_name, training_ratio=training_ratio, rho=rho,
-                         train_pos_count=train_positive_count, train_neg_count=train_negative_count,
-                         test_pos_count=test_positive_count, test_neg_count=test_negative_count)
+    return metrics
     
     return metrics

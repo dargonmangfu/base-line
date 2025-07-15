@@ -130,7 +130,6 @@ def train_model(model, train_loader, val_loader, test_loader, config, dataset_ob
             val_loader, 
             save_dir=None,  # 不保存验证集的混淆矩阵
             dataset_name=config['dataset_name'],
-            training_ratio=epoch/config['epochs'],
             rho=config['rho'],
             dataset_obj=dataset_obj,
             run_number=config['run_number'],
@@ -155,15 +154,14 @@ def train_model(model, train_loader, val_loader, test_loader, config, dataset_ob
                 early_stopped = True
                 break
         
-        # 在测试集上定期评估
+        # 在测试集上定期评估，但不保存混淆矩阵
         if epoch % config['eval_interval'] == 0 or epoch == config['epochs']:
             print(f"\n===== 在测试集上评估 Epoch {epoch}/{config['epochs']} =====")
             metrics = evaluate_model(
                 model, 
                 test_loader, 
-                save_dir=config['save_dir'],
+                save_dir=None,  # 中间评估不保存混淆矩阵
                 dataset_name=config['dataset_name'],
-                training_ratio=epoch/config['epochs'],
                 rho=config['rho'],
                 dataset_obj=dataset_obj,
                 run_number=config['run_number'],
@@ -317,18 +315,18 @@ def main():
             training_time = time.time() - start_time
             print(f"\n训练完成! 总用时: {training_time:.2f} 秒")
             
-            # 最终评估
+            # 最终评估 - 只在这里保存混淆矩阵
             print("\n进行最终评估...")
             metrics = evaluate_model(
                 trained_model, 
                 test_loader, 
-                save_dir=config['save_dir'],
+                save_dir=config['save_dir'],  # 只在最终评估保存混淆矩阵
                 dataset_name=config['dataset_name'],
-                training_ratio=1.0,
                 rho=config['rho'],
                 dataset_obj=dataset,
                 run_number=config['run_number'],
-                model_type=config['model_type']
+                model_type=config['model_type'],
+                is_final=True  # 标记这是最终评估
             )
             
             print("\n===== 最终评估结果 =====")
