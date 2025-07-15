@@ -427,4 +427,4 @@ def get_recommended_epochs(dataset_name, model_type, rho):
 
 if __name__ == "__main__":
     main()
-# python main.py --dataset TBM_K_M --rho 0.01 --val_ratio 0.2 --patience 5
+# python main.py --dataset TBM_K_M --rho 0.01 --val_ratio 0.2 --patience 10

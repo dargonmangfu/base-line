@@ -378,10 +378,20 @@ class ImbalancedDataset:
     # 可选：添加其他辅助方法
     def get_class_distribution(self):
         """返回处理后的类别分布（用于验证）"""
-        train_labels = self.train_data.tensors[1].numpy()
+        # 处理训练集 (Subset 类型)
+        train_indices = self.train_data.indices
+        train_labels = self.train_data.dataset.tensors[1][train_indices].numpy()
+        
+        # 处理验证集 (Subset 类型)
+        val_indices = self.val_data.indices
+        val_labels = self.val_data.dataset.tensors[1][val_indices].numpy()
+        
+        # 处理测试集 (TensorDataset 类型)
         test_labels = self.test_data.tensors[1].numpy()
+        
         return {
             "train": np.bincount(train_labels),
+            "val": np.bincount(val_labels),
             "test": np.bincount(test_labels)
         }
 # Example usage:
