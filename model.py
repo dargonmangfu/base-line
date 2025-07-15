@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import math
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -93,3 +94,82 @@ class BiLSTM(nn.Module):
         # 取最后一个时间步的输出
         out = self.fc(out[:, -1, :])
         return out
+
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, dropout=0.1, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(1)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        x = x + self.pe[:x.size(0), :]
+        return self.dropout(x)
+
+
+class TransformerModel(nn.Module):
+    def __init__(self, input_dim, d_model, nhead, num_encoder_layers, dim_feedforward, seq_length, num_classes, dropout=0.1):
+        super(TransformerModel, self).__init__()
+        # 将输入特征映射到模型维度
+        self.embedding = nn.Linear(input_dim, d_model)
+        
+        # 位置编码
+        self.pos_encoder = PositionalEncoding(d_model, dropout, max_len=seq_length)
+        
+        # Transformer编码器层
+        encoder_layers = nn.TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_encoder_layers)
+        
+        # 分类头
+        self.classifier = nn.Linear(d_model, num_classes)
+        
+        self.d_model = d_model
+        self.seq_length = seq_length
+        
+    def forward(self, x):
+        # x shape: [batch_size, channels, seq_length]
+        # 转换为Transformer期望的形状 [seq_length, batch_size, features]
+        x = x.permute(2, 0, 1)  # [seq_length, batch_size, channels]
+        
+        # 映射到模型维度
+        x = self.embedding(x)
+        
+        # 添加位置编码
+        x = self.pos_encoder(x)
+        
+        # 通过Transformer编码器
+        x = self.transformer_encoder(x)
+        
+        # 使用序列的平均值进行分类
+        x = x.mean(dim=0)  # [batch_size, d_model]
+        
+        # 分类层
+        x = self.classifier(x)
+        return x
+
+
+def create_transformer(input_dim=3, seq_length=32, num_classes=10):
+    """创建Transformer模型"""
+    d_model = 128  # 模型维度
+    nhead = 8  # 多头注意力的头数
+    num_encoder_layers = 6  # 编码器层数
+    dim_feedforward = 512  # 前馈网络维度
+    dropout = 0.1  # dropout率
+    
+    return TransformerModel(
+        input_dim=input_dim,
+        d_model=d_model,
+        nhead=nhead,
+        num_encoder_layers=num_encoder_layers,
+        dim_feedforward=dim_feedforward,
+        seq_length=seq_length,
+        num_classes=num_classes,
+        dropout=dropout
+    )
