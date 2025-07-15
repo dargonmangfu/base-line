@@ -222,6 +222,7 @@ class ImbalancedDataset:
         """
         核心预处理：降采样正类 + 重映射标签（0/1）+ 划分验证集
         遵循论文（Section 4.3）：
+
           - 正类（少数类）标签 -> 0
           - 负类（多数类）标签 -> 1
           - 正类样本数降至 rho * N（N=负类原始样本数）
@@ -243,31 +244,78 @@ class ImbalancedDataset:
         else:
             test_labels = self.test_data.targets.numpy()
         
-        # 计算划分验证集后训练集需要的总样本数
-        # 如果最终训练集负类样本数为train_num_negative，则划分前需要更多样本
-        train_ratio = 1 - self.val_ratio
-        total_negative_needed = int(self.train_num_negative / train_ratio)
+        # 保存原始训练数据的引用
+        original_train_data = self.train_data.data
         
-        # 降采样训练集 - 使用调整后的负类样本数
-        selected_data, remapped_labels = self._downsample_data(
-            self.train_data.data, train_labels, self.positive_classes, self.negative_classes,
-            target_negative_count=total_negative_needed
+        # 计算训练集和验证集所需的样本数量
+        train_negative_count = self.train_num_negative
+        val_negative_count = int(self.val_ratio * self.train_num_negative)
+        
+        train_positive_count = max(1, int(self.rho * train_negative_count))
+        val_positive_count = max(1, int(self.rho * val_negative_count))
+        
+        print(f"目标样本数量 - 训练集: 正类={train_positive_count}, 负类={train_negative_count}")
+        print(f"目标样本数量 - 验证集: 正类={val_positive_count}, 负类={val_negative_count}")
+        
+        # 分离正/负类索引
+        positive_idx = np.where(np.isin(train_labels, self.positive_classes))[0]
+        negative_idx = np.where(np.isin(train_labels, self.negative_classes))[0]
+        
+        # 采样训练集和验证集所需的总样本数
+        total_positive_needed = train_positive_count + val_positive_count
+        total_negative_needed = train_negative_count + val_negative_count
+        
+        # 检查样本数量是否足够
+        if len(positive_idx) < total_positive_needed:
+            print(f"警告: 正类样本不足，需要{total_positive_needed}个，实际{len(positive_idx)}个，将进行有放回采样")
+        if len(negative_idx) < total_negative_needed:
+            print(f"警告: 负类样本不足，需要{total_negative_needed}个，实际{len(negative_idx)}个，将进行有放回采样")
+        
+        # 采样正类和负类样本
+        pos_replace = len(positive_idx) < total_positive_needed
+        neg_replace = len(negative_idx) < total_negative_needed
+        
+        sampled_positive_idx = np.random.choice(positive_idx, size=total_positive_needed, replace=pos_replace)
+        sampled_negative_idx = np.random.choice(negative_idx, size=total_negative_needed, replace=neg_replace)
+        
+        # 分配给训练集和验证集
+        train_pos_idx = sampled_positive_idx[:train_positive_count]
+        val_pos_idx = sampled_positive_idx[train_positive_count:]
+        
+        train_neg_idx = sampled_negative_idx[:train_negative_count]
+        val_neg_idx = sampled_negative_idx[train_negative_count:]
+        
+        # 创建训练集
+        train_indices = np.concatenate([train_pos_idx, train_neg_idx])
+        np.random.shuffle(train_indices)
+        
+        train_data = original_train_data[train_indices]
+        train_labels_raw = train_labels[train_indices]
+        train_labels_remapped = np.where(
+            np.isin(train_labels_raw, self.positive_classes), 0, 1
         )
         
-        # 确保数据是torch张量
-        if not isinstance(selected_data, torch.Tensor):
-            selected_data = torch.tensor(selected_data)
+        # 确保训练数据是torch张量
+        if not isinstance(train_data, torch.Tensor):
+            train_data = torch.tensor(train_data)
         
-        full_dataset = TensorDataset(selected_data, torch.tensor(remapped_labels))
+        self.train_data = TensorDataset(train_data, torch.tensor(train_labels_remapped))
         
-        # 将降采样后的数据集划分为训练集和验证集
-        train_size = int((1 - self.val_ratio) * len(full_dataset))
-        val_size = len(full_dataset) - train_size
-        self.train_data, self.val_data = random_split(
-            full_dataset, 
-            [train_size, val_size],
-            generator=torch.Generator().manual_seed(self.seed)
+        # 创建验证集
+        val_indices = np.concatenate([val_pos_idx, val_neg_idx])
+        np.random.shuffle(val_indices)
+        
+        val_data = original_train_data[val_indices]
+        val_labels_raw = train_labels[val_indices]
+        val_labels_remapped = np.where(
+            np.isin(val_labels_raw, self.positive_classes), 0, 1
         )
+        
+        # 确保验证数据是torch张量
+        if not isinstance(val_data, torch.Tensor):
+            val_data = torch.tensor(val_data)
+        
+        self.val_data = TensorDataset(val_data, torch.tensor(val_labels_remapped))
         
         # 处理测试集（平衡采样，使两类数量相等）
         # 只选择正类和负类标签的数据
@@ -328,43 +376,10 @@ class ImbalancedDataset:
 
     def _downsample_data(self, data, labels, positive_classes, negative_classes, target_negative_count=None):
         """
-        专门用于降采样的方法
-        :param data: 原始数据
-        :param labels: 原始标签
-        :param positive_classes: 正类标签值列表
-        :param negative_classes: 负类标签值列表
-        :param target_negative_count: 目标负类样本数量（如果为None则使用self.train_num_negative）
-        :return: (降采样后的数据, 重映射后的标签)
+        专门用于降采样的方法 - 已废弃，不再使用
         """
-        # Step 1: 分离正/负类索引
-        positive_idx = np.where(np.isin(labels, positive_classes))[0]
-        negative_idx = np.where(np.isin(labels, negative_classes))[0]
-        
-        # Step 2: 限制负类样本数量
-        if target_negative_count is None:
-            target_negative_count = self.train_num_negative
-        
-        n_negative = min(len(negative_idx), target_negative_count)
-        sampled_negative_idx = np.random.choice(negative_idx, size=n_negative, replace=False)
-        
-        # Step 3: 降采样正类（目标样本数 = rho * n_negative）
-        positive_num = max(1, int(self.rho * n_negative))  # 至少保留1个样本
-        downsampled_positive_idx = np.random.choice(
-            positive_idx, size=positive_num, replace=len(positive_idx) < positive_num
-        )
-        
-        # Step 4: 合并降采样后的正类 + 采样后的负类
-        selected_idx = np.concatenate([downsampled_positive_idx, sampled_negative_idx])
-        np.random.shuffle(selected_idx)  # 打乱顺序
-        
-        # Step 5: 创建新数据集（标签映射：正类->0, 负类->1）
-        selected_data = data[selected_idx]
-        selected_labels = labels[selected_idx]
-        remapped_labels = np.where(
-            np.isin(selected_labels, positive_classes), 0, 1  # 少数类=0, 多数类=1
-        )
-        
-        return selected_data, remapped_labels
+        # 这个方法已被新的_preprocess_data逻辑替代
+        pass
 
     def get_dataloaders(self):
         """
@@ -396,13 +411,11 @@ class ImbalancedDataset:
     # 可选：添加其他辅助方法
     def get_class_distribution(self):
         """返回处理后的类别分布（用于验证）"""
-        # 处理训练集 (Subset 类型)
-        train_indices = self.train_data.indices
-        train_labels = self.train_data.dataset.tensors[1][train_indices].numpy()
+        # 处理训练集 (TensorDataset 类型)
+        train_labels = self.train_data.tensors[1].numpy()
         
-        # 处理验证集 (Subset 类型)
-        val_indices = self.val_data.indices
-        val_labels = self.val_data.dataset.tensors[1][val_indices].numpy()
+        # 处理验证集 (TensorDataset 类型)
+        val_labels = self.val_data.tensors[1].numpy()
         
         # 处理测试集 (TensorDataset 类型)
         test_labels = self.test_data.tensors[1].numpy()

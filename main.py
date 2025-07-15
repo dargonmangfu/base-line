@@ -245,10 +245,10 @@ def main():
     
     # 打印数据集统计信息
     dist = dataset.get_class_distribution()
-    print(f"训练集分布: {dist['train']}")
-    print(f"验证集分布: {dist['val']}")  
-    print(f"测试集分布: {dist['test']}")
-    
+    print(f"训练集分布: 正类={dist['train'][0]}, 负类={dist['train'][1]}")
+    print(f"验证集分布: 正类={dist['val'][0]}, 负类={dist['val'][1]}")  
+    print(f"测试集分布: 正类={dist['test'][0]}, 负类={dist['test'][1]}")
+
     # 确定数据集的输入维度
     if 'TBM' in args.dataset:
         input_channels = 3
