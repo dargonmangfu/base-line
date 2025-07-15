@@ -2,11 +2,11 @@ import torch
 import torchvision
 import numpy as np
 import h5py
-from torch.utils.data import DataLoader, Subset, TensorDataset
+from torch.utils.data import DataLoader, Subset, TensorDataset, random_split
 # from sklearn.model_selection import train_test_split
 
 class ImbalancedDataset:
-    def __init__(self, dataset_name="mnist", rho=0.01, batch_size=64, seed=42, test_num_positive=2000, test_num_negative=2000):
+    def __init__(self, dataset_name="mnist", rho=0.01, batch_size=64, seed=42, test_num_positive=2000, test_num_negative=2000, val_ratio=0.2):
         """
         初始化数据集处理类
         :param dataset_name: 数据集名称 (e.g., "mnist", "cifar10")
@@ -15,6 +15,7 @@ class ImbalancedDataset:
         :param seed: 随机种子（确保可复现）
         :param test_num_positive: 测试集中正类的样本数量
         :param test_num_negative: 测试集中负类的样本数量
+        :param val_ratio: 验证集占训练集的比例
         """
         self.dataset_name = dataset_name
         self.rho = rho
@@ -22,6 +23,7 @@ class ImbalancedDataset:
         self.seed = seed
         self.test_num_positive = test_num_positive
         self.test_num_negative = test_num_negative
+        self.val_ratio = val_ratio
         torch.manual_seed(seed)
         np.random.seed(seed)
         
@@ -216,7 +218,7 @@ class ImbalancedDataset:
 
     def _preprocess_data(self):
         """
-        核心预处理：降采样正类 + 重映射标签（0/1）
+        核心预处理：降采样正类 + 重映射标签（0/1）+ 划分验证集
         遵循论文（Section 4.3）：
           - 正类（少数类）标签 -> 0
           - 负类（多数类）标签 -> 1
@@ -249,6 +251,15 @@ class ImbalancedDataset:
             selected_data = torch.tensor(selected_data)
         
         self.train_data = TensorDataset(selected_data, torch.tensor(remapped_labels))
+        
+        # 将降采样后的训练集划分为训练集和验证集
+        train_size = int((1 - self.val_ratio) * len(self.train_data))
+        val_size = len(self.train_data) - train_size
+        self.train_data, self.val_data = random_split(
+            self.train_data, 
+            [train_size, val_size],
+            generator=torch.Generator().manual_seed(self.seed)
+        )
         
         # 处理测试集（平衡采样，使两类数量相等）
         # 只选择正类和负类标签的数据
@@ -339,16 +350,19 @@ class ImbalancedDataset:
 
     def get_dataloaders(self):
         """
-        生成训练和测试 DataLoader
-        :return: (train_loader, test_loader)
+        生成训练、验证和测试 DataLoader
+        :return: (train_loader, val_loader, test_loader)
         """
         train_loader = DataLoader(
             self.train_data, batch_size=self.batch_size, shuffle=True
         )
+        val_loader = DataLoader(
+            self.val_data, batch_size=self.batch_size, shuffle=False
+        )
         test_loader = DataLoader(
             self.test_data, batch_size=self.batch_size, shuffle=False
         )
-        return train_loader, test_loader
+        return train_loader, val_loader, test_loader
         
     def get_full_dataset(self):
         """
@@ -378,7 +392,7 @@ if __name__ == "__main__":
     dataset = ImbalancedDataset(dataset_name="TBM_K", rho=0.01, batch_size=64)
 
     # 获取 DataLoader
-    train_loader, test_loader = dataset.get_dataloaders()
+    train_loader, val_loader, test_loader = dataset.get_dataloaders()
 
     # 验证类别分布
     dist = dataset.get_class_distribution()

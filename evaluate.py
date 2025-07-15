@@ -99,7 +99,7 @@ def plot_confusion_matrix(y_true, y_pred, save_path=None, model_type=None, datas
     # 关闭图形以释放内存，不显示窗口
     plt.close()
 
-def evaluate_model(model, test_loader, save_dir='./', dataset_name=None, training_ratio=None, rho=None, dataset_obj=None, run_number=None, model_type=None):
+def evaluate_model(model, test_loader, save_dir='./', dataset_name=None, training_ratio=None, rho=None, dataset_obj=None, run_number=None, model_type=None, is_validation=False):
     """
     评估模型性能并计算相关指标
     
@@ -113,6 +113,7 @@ def evaluate_model(model, test_loader, save_dir='./', dataset_name=None, trainin
         dataset_obj: 数据集对象，用于获取样本数量统计
         run_number: 运行次数编号，用于文件命名
         model_type: 模型类型名称
+        is_validation: 是否是验证集评估
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -164,7 +165,8 @@ def evaluate_model(model, test_loader, save_dir='./', dataset_name=None, trainin
     metrics = compute_metrics(all_labels, all_preds)
     
     # 打印结果
-    print("\n===== 模型评估结果 =====")
+    eval_type = "验证集" if is_validation else "测试集"
+    print(f"\n===== {eval_type}评估结果 =====")
     print(f"总体准确率: {metrics['accuracy']:.4f}")
     print(f"少数类准确率: {metrics['class_0_acc']:.4f}")
     print(f"多数类准确率: {metrics['class_1_acc']:.4f}")
@@ -172,6 +174,10 @@ def evaluate_model(model, test_loader, save_dir='./', dataset_name=None, trainin
     print(f"多数类F1-score: {metrics['f1_majority']:.4f}")
     print(f"宏平均F1-score: {metrics['f1_macro']:.4f}")
     print(f"G-mean: {metrics['g_mean']:.4f}")
+    
+    # 如果是验证集评估，不保存结果和混淆矩阵
+    if is_validation:
+        return metrics
     
     # 创建保存目录
     os.makedirs(save_dir, exist_ok=True)

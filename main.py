@@ -5,6 +5,7 @@ import numpy as np
 import os
 import argparse
 import time
+import copy
 from datetime import datetime
 from tqdm import tqdm
 
@@ -22,13 +23,14 @@ def set_seed(seed):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-def train_model(model, train_loader, test_loader, config, dataset_obj=None):
+def train_model(model, train_loader, val_loader, test_loader, config, dataset_obj=None):
     """
     训练模型函数
     
     Args:
         model: 要训练的模型
         train_loader: 训练数据加载器
+        val_loader: 验证数据加载器
         test_loader: 测试数据加载器
         config: 配置参数字典
         dataset_obj: 数据集对象(用于评估)
@@ -49,6 +51,13 @@ def train_model(model, train_loader, test_loader, config, dataset_obj=None):
     # 训练日志
     train_losses = []
     val_losses = []
+    
+    # 早停参数
+    best_val_metric = 0.0  # 使用验证集G-mean作为早停指标
+    best_model_wts = copy.deepcopy(model.state_dict())
+    patience = config['patience']
+    counter = 0
+    early_stopped = False
     
     print(f"开始训练 {config['model_type']} 模型 - 数据集: {config['dataset_name']}, 不平衡率: {config['rho']}")
     
@@ -114,30 +123,62 @@ def train_model(model, train_loader, test_loader, config, dataset_obj=None):
         
         print(f"Epoch {epoch} - 训练损失: {epoch_loss:.4f}, 训练准确率: {epoch_acc:.2f}%")
         
-        # 在部分训练完成时评估模型
-        training_ratio = epoch / config['epochs']
+        # 每个epoch都在验证集上评估
+        print(f"\n===== 在验证集上评估 Epoch {epoch} =====")
+        val_metrics = evaluate_model(
+            model, 
+            val_loader, 
+            save_dir=None,  # 不保存验证集的混淆矩阵
+            dataset_name=config['dataset_name'],
+            training_ratio=epoch/config['epochs'],
+            rho=config['rho'],
+            dataset_obj=dataset_obj,
+            run_number=config['run_number'],
+            model_type=config['model_type'],
+            is_validation=True  # 标记这是验证集评估
+        )
+        
+        val_losses.append(val_metrics['g_mean'])  # 使用G-mean作为监控指标
+        
+        # 早停检查
+        current_val_metric = val_metrics['g_mean']
+        if current_val_metric > best_val_metric:
+            print(f"验证集G-mean提升: {best_val_metric:.4f} -> {current_val_metric:.4f}")
+            best_val_metric = current_val_metric
+            best_model_wts = copy.deepcopy(model.state_dict())
+            counter = 0
+        else:
+            counter += 1
+            print(f"验证集G-mean未提升, 当前耐心: {counter}/{patience}")
+            if counter >= patience:
+                print(f"早停触发! 已连续 {patience} 个epoch未见改善")
+                early_stopped = True
+                break
+        
+        # 在测试集上定期评估
         if epoch % config['eval_interval'] == 0 or epoch == config['epochs']:
-            print(f"\n===== 在训练完成比例 {training_ratio:.2f} 时评估模型 =====")
+            print(f"\n===== 在测试集上评估 Epoch {epoch}/{config['epochs']} =====")
             metrics = evaluate_model(
                 model, 
                 test_loader, 
                 save_dir=config['save_dir'],
                 dataset_name=config['dataset_name'],
-                training_ratio=training_ratio,
+                training_ratio=epoch/config['epochs'],
                 rho=config['rho'],
                 dataset_obj=dataset_obj,
                 run_number=config['run_number'],
                 model_type=config['model_type']
             )
-            
-            val_losses.append(metrics['accuracy'])
-        
-        # 保存最终模型
-        if epoch == config['epochs']:
-            model_filename = f"{config['dataset_name']}_{config['model_type']}_rho{config['rho']}_run{config['run_number']}.pth"
-            model_path = os.path.join(config['save_dir'], model_filename)
-            torch.save(model.state_dict(), model_path)
-            print(f"模型已保存到 {model_path}")
+    
+    # 加载最佳模型权重
+    model.load_state_dict(best_model_wts)
+    print(f"\n训练{'已提前结束' if early_stopped else '已完成'}, 使用验证集上最佳性能的模型")
+    
+    # 保存最佳模型
+    model_filename = f"{config['dataset_name']}_{config['model_type']}_rho{config['rho']}_run{config['run_number']}.pth"
+    model_path = os.path.join(config['save_dir'], model_filename)
+    torch.save(model.state_dict(), model_path)
+    print(f"最佳模型已保存到 {model_path}")
     
     return model
 
@@ -152,11 +193,13 @@ def main():
                         help='数据集名称')
     parser.add_argument('--rho', type=float, default=0.01, help='不平衡因子(正类样本比例)')
     parser.add_argument('--batch_size', type=int, default=64, help='批次大小')
+    parser.add_argument('--val_ratio', type=float, default=0.2, help='验证集占训练集的比例')
     
     # 训练参数
-    parser.add_argument('--eval_interval', type=int, default=5, help='评估间隔(每多少个epoch评估一次)')
+    parser.add_argument('--eval_interval', type=int, default=5, help='测试集评估间隔(每多少个epoch评估一次)')
     parser.add_argument('--seed', type=int, default=42, help='随机种子')
     parser.add_argument('--gpu', type=int, default=0, help='GPU ID，设为-1表示使用CPU')
+    parser.add_argument('--patience', type=int, default=10, help='早停耐心值，连续多少个epoch无改善后停止')
     
     # 保存参数
     parser.add_argument('--save_dir', type=str, default='./results', help='结果保存目录')
@@ -196,14 +239,16 @@ def main():
         dataset_name=args.dataset,
         rho=args.rho,
         batch_size=args.batch_size,
-        seed=args.seed
+        seed=args.seed,
+        val_ratio=args.val_ratio
     )
     
-    train_loader, test_loader = dataset.get_dataloaders()
+    train_loader, val_loader, test_loader = dataset.get_dataloaders()
     
     # 打印数据集统计信息
     dist = dataset.get_class_distribution()
-    print(f"训练集分布: {dist['train']}")  
+    print(f"训练集分布: {dist['train']}")
+    print(f"验证集分布: {dist['val']}")  
     print(f"测试集分布: {dist['test']}")
     
     # 确定数据集的输入维度
@@ -237,7 +282,8 @@ def main():
                 'seed': args.seed,
                 'device': device,
                 'save_dir': args.save_dir,
-                'run_number': run_number
+                'run_number': run_number,
+                'patience': args.patience
             }
             
             # 创建对应的模型
@@ -261,14 +307,11 @@ def main():
             else:
                 raise ValueError(f"不支持的模型类型: {model_type}")
             
-            # 打印模型结构
-            print(model)
-            
             # 训练模型
             print("\n开始训练过程...")
             start_time = time.time()
             
-            trained_model = train_model(model, train_loader, test_loader, config, dataset_obj=dataset)
+            trained_model = train_model(model, train_loader, val_loader, test_loader, config, dataset_obj=dataset)
             
             # 打印训练时间
             training_time = time.time() - start_time
@@ -384,3 +427,4 @@ def get_recommended_epochs(dataset_name, model_type, rho):
 
 if __name__ == "__main__":
     main()
+# python main.py --dataset TBM_K_M --rho 0.01 --val_ratio 0.2 --patience 5
