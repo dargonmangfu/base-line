@@ -129,7 +129,7 @@ class TransformerModel(nn.Module):
         self.pos_encoder = PositionalEncoding(d_model, dropout, max_len=seq_length)
         
         # Transformer编码器层
-        encoder_layers = nn.TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout)
+        encoder_layers = nn.TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout, batch_first=True)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_encoder_layers)
         
         # 分类头
