@@ -81,8 +81,13 @@ class BiLSTM(nn.Module):
         self.fc = nn.Linear(hidden_size * 2, num_classes)  # *2 因为双向
         
     def forward(self, x):
-        # x shape: (batch, 1, 28, 28) -> (batch, 28, 28)
-        x = x.squeeze(1)  # 移除通道维度
+        # 根据输入数据形状进行不同处理
+        if len(x.shape) == 4:  # 图像数据 (batch, 1, height, width)
+            # 移除通道维度，转为 (batch, height, width)
+            x = x.squeeze(1)
+        elif len(x.shape) == 3:  # TBM数据 (batch, channels, seq_length)
+            # 将形状从 (batch, channels, seq_length) 转换为 (batch, seq_length, channels)
+            x = x.permute(0, 2, 1)
         
         # 初始化隐藏状态
         h0 = torch.zeros(self.num_layers * 2, x.size(0), self.hidden_size).to(x.device)
