@@ -243,22 +243,28 @@ class ImbalancedDataset:
         else:
             test_labels = self.test_data.targets.numpy()
         
-        # 降采样训练集
+        # 计算划分验证集后训练集需要的总样本数
+        # 如果最终训练集负类样本数为train_num_negative，则划分前需要更多样本
+        train_ratio = 1 - self.val_ratio
+        total_negative_needed = int(self.train_num_negative / train_ratio)
+        
+        # 降采样训练集 - 使用调整后的负类样本数
         selected_data, remapped_labels = self._downsample_data(
-            self.train_data.data, train_labels, self.positive_classes, self.negative_classes
+            self.train_data.data, train_labels, self.positive_classes, self.negative_classes,
+            target_negative_count=total_negative_needed
         )
         
         # 确保数据是torch张量
         if not isinstance(selected_data, torch.Tensor):
             selected_data = torch.tensor(selected_data)
         
-        self.train_data = TensorDataset(selected_data, torch.tensor(remapped_labels))
+        full_dataset = TensorDataset(selected_data, torch.tensor(remapped_labels))
         
-        # 将降采样后的训练集划分为训练集和验证集
-        train_size = int((1 - self.val_ratio) * len(self.train_data))
-        val_size = len(self.train_data) - train_size
+        # 将降采样后的数据集划分为训练集和验证集
+        train_size = int((1 - self.val_ratio) * len(full_dataset))
+        val_size = len(full_dataset) - train_size
         self.train_data, self.val_data = random_split(
-            self.train_data, 
+            full_dataset, 
             [train_size, val_size],
             generator=torch.Generator().manual_seed(self.seed)
         )
@@ -320,21 +326,25 @@ class ImbalancedDataset:
         
         return selected_data, remapped_labels
 
-    def _downsample_data(self, data, labels, positive_classes, negative_classes):
+    def _downsample_data(self, data, labels, positive_classes, negative_classes, target_negative_count=None):
         """
         专门用于降采样的方法
         :param data: 原始数据
         :param labels: 原始标签
         :param positive_classes: 正类标签值列表
         :param negative_classes: 负类标签值列表
+        :param target_negative_count: 目标负类样本数量（如果为None则使用self.train_num_negative）
         :return: (降采样后的数据, 重映射后的标签)
         """
         # Step 1: 分离正/负类索引
         positive_idx = np.where(np.isin(labels, positive_classes))[0]
         negative_idx = np.where(np.isin(labels, negative_classes))[0]
         
-        # Step 2: 限制负类样本数量为train_num_negative
-        n_negative = min(len(negative_idx), self.train_num_negative)
+        # Step 2: 限制负类样本数量
+        if target_negative_count is None:
+            target_negative_count = self.train_num_negative
+        
+        n_negative = min(len(negative_idx), target_negative_count)
         sampled_negative_idx = np.random.choice(negative_idx, size=n_negative, replace=False)
         
         # Step 3: 降采样正类（目标样本数 = rho * n_negative）

@@ -184,6 +184,8 @@ def evaluate_model(model, test_loader, save_dir='./', dataset_name=None, rho=Non
     # 获取数据集统计信息
     train_positive_count = 0
     train_negative_count = 0
+    val_positive_count = 0
+    val_negative_count = 0
     test_positive_count = 0
     test_negative_count = 0
     
@@ -193,10 +195,13 @@ def evaluate_model(model, test_loader, save_dir='./', dataset_name=None, rho=Non
             class_distribution = dataset_obj.get_class_distribution()
             train_positive_count = int(class_distribution['train'][0])  # 正类(标签0)数量
             train_negative_count = int(class_distribution['train'][1])  # 负类(标签1)数量
+            val_positive_count = int(class_distribution['val'][0])      # 验证集正类(标签0)数量
+            val_negative_count = int(class_distribution['val'][1])      # 验证集负类(标签1)数量
             test_positive_count = int(class_distribution['test'][0])    # 正类(标签0)数量
             test_negative_count = int(class_distribution['test'][1])    # 负类(标签1)数量
             
             print(f"训练集 - 正类样本数: {train_positive_count}, 负类样本数: {train_negative_count}")
+            print(f"验证集 - 正类样本数: {val_positive_count}, 负类样本数: {val_negative_count}")
             print(f"测试集 - 正类样本数: {test_positive_count}, 负类样本数: {test_negative_count}")
         except Exception as e:
             print(f"获取数据集统计信息时出错: {e}")
@@ -210,6 +215,8 @@ def evaluate_model(model, test_loader, save_dir='./', dataset_name=None, rho=Non
         '不平衡率rho': [rho if rho is not None else 'Unknown'],
         '训练集正类样本数': [train_positive_count],
         '训练集负类样本数': [train_negative_count],
+        '验证集正类样本数': [val_positive_count],
+        '验证集负类样本数': [val_negative_count],
         '测试集正类样本数': [test_positive_count],
         '测试集负类样本数': [test_negative_count],
         '总体准确率': [metrics['accuracy']],
@@ -262,7 +269,5 @@ def evaluate_model(model, test_loader, save_dir='./', dataset_name=None, rho=Non
                              dataset_name=dataset_name, rho=rho,
                              train_pos_count=train_positive_count, train_neg_count=train_negative_count,
                              test_pos_count=test_positive_count, test_neg_count=test_negative_count)
-    
-    return metrics
     
     return metrics
