@@ -248,8 +248,8 @@ class ImbalancedDataset:
         original_train_data = self.train_data.data
         
         # 计算训练集和验证集所需的样本数量
-        train_negative_count = self.train_num_negative
         val_negative_count = int(self.val_ratio * self.train_num_negative)
+        train_negative_count = self.train_num_negative - val_negative_count
         
         train_positive_count = max(1, int(self.rho * train_negative_count))
         val_positive_count = max(1, int(self.rho * val_negative_count))
