@@ -187,7 +187,10 @@ def main():
     # 数据集参数
     parser.add_argument('--dataset', type=str, default='mnist', 
                         choices=['mnist', 'cifar10', 'fashion_mnist', 'TBM_K', 'TBM_M', 'TBM_K_M', 
-                                 'TBM_K_Noise', 'TBM_M_Noise', 'TBM_K_M_Noise'],
+                                 'TBM_K_Noise', 'TBM_M_Noise', 'TBM_K_M_Noise',
+                                 'TBM_K_M_Noise_snr_3', 'TBM_K_M_Noise_snr_1', 'TBM_K_M_Noise_snr_0',
+                                 'TBM_K_M_Noise_snr_-1', 'TBM_K_M_Noise_snr_-3', 'TBM_K_M_Noise_snr_-5',
+                                 'TBM_K_M_Noise_snr_-7', 'TBM_K_M_Noise_snr_-10'],
                         help='数据集名称')
     parser.add_argument('--rho', type=float, default=0.01, help='不平衡因子(正类样本比例)')
     parser.add_argument('--batch_size', type=int, default=64, help='批次大小')
@@ -201,6 +204,10 @@ def main():
     
     # 保存参数
     parser.add_argument('--save_dir', type=str, default='./results', help='结果保存目录')
+    
+    # 添加新参数控制是否遍历SNR数据集
+    parser.add_argument('--run_snr_experiments', action='store_true', 
+                        help='是否运行SNR实验，如果设置则遍历所有SNR数据集')
     
     args = parser.parse_args()
     
@@ -219,122 +226,151 @@ def main():
     models_config = {
         'ResNet32_1d': {
             'learning_rate': 0.001,
-            'epochs': get_recommended_epochs(args.dataset, 'ResNet32_1d', args.rho),
         },
         'BiLSTM': {
             'learning_rate': 0.001,
-            'epochs': get_recommended_epochs(args.dataset, 'BiLSTM', args.rho),
         },
         'Transformer': {
             'learning_rate': 0.0005,  # Transformer通常使用更小的学习率
-            'epochs': get_recommended_epochs(args.dataset, 'Transformer', args.rho),
         }
     }
     
-    # 加载数据集
-    print(f"正在加载 {args.dataset} 数据集, 不平衡率 rho={args.rho}")
-    dataset = ImbalancedDataset(
-        dataset_name=args.dataset,
-        rho=args.rho,
-        batch_size=args.batch_size,
-        seed=args.seed,
-        val_ratio=args.val_ratio
-    )
+    # 如果设置了运行SNR实验，则遍历所有SNR数据集
+    if args.run_snr_experiments:
+        snr_datasets = [
+            'TBM_K_M_Noise_snr_3',
+            'TBM_K_M_Noise_snr_1', 
+            'TBM_K_M_Noise_snr_0',
+            'TBM_K_M_Noise_snr_-1',
+            'TBM_K_M_Noise_snr_-3',
+            'TBM_K_M_Noise_snr_-5',
+            'TBM_K_M_Noise_snr_-7',
+            'TBM_K_M_Noise_snr_-10'
+        ]
+        datasets_to_run = snr_datasets
+    else:
+        # 只运行指定的数据集
+        datasets_to_run = [args.dataset]
     
-    train_loader, val_loader, test_loader = dataset.get_dataloaders()
-    
-    # 打印数据集统计信息
-    dist = dataset.get_class_distribution()
-    print(f"训练集分布: 正类={dist['train'][0]}, 负类={dist['train'][1]}")
-    print(f"验证集分布: 正类={dist['val'][0]}, 负类={dist['val'][1]}")  
-    print(f"测试集分布: 正类={dist['test'][0]}, 负类={dist['test'][1]}")
-
-    # 确定数据集的输入维度
-    if 'TBM' in args.dataset:
-        input_channels = 3
-        seq_length = 1024  # TBM数据的序列长度
-    elif args.dataset == 'cifar10':
-        input_channels = 3
-        seq_length = 32  # CIFAR-10的图像大小
-    else:  # MNIST, Fashion-MNIST
-        input_channels = 1
-        seq_length = 28  # MNIST的图像大小
-    
-    # 遍历所有模型训练
+    # 外层循环：遍历所有模型
     for model_type, model_params in models_config.items():
-        # 每个模型训练两次
-        for run_number in range(1, 3):
-            print(f"\n{'='*50}")
-            print(f"开始训练 {model_type} 模型 (第 {run_number} 次运行)")
-            print(f"{'='*50}\n")
+        print(f"\n{'='*80}")
+        print(f"开始训练 {model_type} 模型")
+        print(f"{'='*80}\n")
+        
+        # 内层循环：遍历所有数据集
+        for dataset_name in datasets_to_run:
+            print(f"\n{'-'*60}")
+            print(f"当前数据集: {dataset_name}")
+            print(f"{'-'*60}\n")
             
-            # 创建配置字典
-            config = {
-                'dataset_name': args.dataset,
-                'rho': args.rho,
-                'batch_size': args.batch_size,
-                'model_type': model_type,
-                'learning_rate': model_params['learning_rate'],
-                'epochs': model_params['epochs'],
-                'eval_interval': args.eval_interval,
-                'seed': args.seed,
-                'device': device,
-                'save_dir': args.save_dir,
-                'run_number': run_number,
-                'patience': args.patience
-            }
-            
-            # 创建对应的模型
-            if model_type == 'ResNet32_1d':
-                model = ResNet32_1d(input_channels=input_channels, seq_length=seq_length, num_classes=2)
-            elif model_type == 'BiLSTM':
-                if 'TBM' in args.dataset:
-                    # BiLSTM需要输入为(batch, seq_len, features)
-                    input_size = input_channels  # 特征数为通道数
-                    hidden_size = 128
-                    num_layers = 2
-                    model = BiLSTM(input_size, hidden_size, num_layers, num_classes=2)
-                else:
-                    # 对于图像数据，把它当作一个序列
-                    input_size = seq_length  # 每一行作为一个时间步的特征
-                    hidden_size = 128
-                    num_layers = 2
-                    model = BiLSTM(input_size, hidden_size, num_layers, num_classes=2)
-            elif model_type == 'Transformer':
-                model = create_transformer(input_dim=input_channels, seq_length=seq_length, num_classes=2)
-            else:
-                raise ValueError(f"不支持的模型类型: {model_type}")
-            
-            # 训练模型
-            print("\n开始训练过程...")
-            start_time = time.time()
-            
-            trained_model = train_model(model, train_loader, val_loader, test_loader, config, dataset_obj=dataset)
-            
-            # 打印训练时间
-            training_time = time.time() - start_time
-            print(f"\n训练完成! 总用时: {training_time:.2f} 秒")
-            
-            # 最终评估 - 只在这里保存混淆矩阵
-            print("\n进行最终评估...")
-            metrics = evaluate_model(
-                trained_model, 
-                test_loader, 
-                save_dir=config['save_dir'],  # 只在最终评估保存混淆矩阵
-                dataset_name=config['dataset_name'],
-                rho=config['rho'],
-                dataset_obj=dataset,
-                run_number=config['run_number'],
-                model_type=config['model_type'],
-                is_final=True  # 标记这是最终评估
+            # 加载数据集
+            print(f"正在加载 {dataset_name} 数据集, 不平衡率 rho={args.rho}")
+            dataset = ImbalancedDataset(
+                dataset_name=dataset_name,
+                rho=args.rho,
+                batch_size=args.batch_size,
+                seed=args.seed,
+                val_ratio=args.val_ratio
             )
             
-            print("\n===== 最终评估结果 =====")
-            for metric_name, metric_value in metrics.items():
-                print(f"{metric_name}: {metric_value:.4f}")
+            train_loader, val_loader, test_loader = dataset.get_dataloaders()
             
-            # 释放内存
-            del model, trained_model
+            # 打印数据集统计信息
+            dist = dataset.get_class_distribution()
+            print(f"训练集分布: 正类={dist['train'][0]}, 负类={dist['train'][1]}")
+            print(f"验证集分布: 正类={dist['val'][0]}, 负类={dist['val'][1]}")  
+            print(f"测试集分布: 正类={dist['test'][0]}, 负类={dist['test'][1]}")
+
+            # 确定数据集的输入维度
+            if 'TBM' in dataset_name:
+                input_channels = 3
+                seq_length = 1024  # TBM数据的序列长度
+            elif dataset_name == 'cifar10':
+                input_channels = 3
+                seq_length = 32  # CIFAR-10的图像大小
+            else:  # MNIST, Fashion-MNIST
+                input_channels = 1
+                seq_length = 28  # MNIST的图像大小
+            
+            # 每个模型在每个数据集上训练两次
+            for run_number in range(1, 3):
+                print(f"\n{'='*50}")
+                print(f"开始训练 {model_type} 模型在 {dataset_name} 数据集上 (第 {run_number} 次运行)")
+                print(f"{'='*50}\n")
+                
+                # 创建配置字典
+                config = {
+                    'dataset_name': dataset_name,
+                    'rho': args.rho,
+                    'batch_size': args.batch_size,
+                    'model_type': model_type,
+                    'learning_rate': model_params['learning_rate'],
+                    'epochs': get_recommended_epochs(dataset_name, model_type, args.rho),
+                    'eval_interval': args.eval_interval,
+                    'seed': args.seed,
+                    'device': device,
+                    'save_dir': args.save_dir,
+                    'run_number': run_number,
+                    'patience': args.patience
+                }
+                
+                # 创建对应的模型
+                if model_type == 'ResNet32_1d':
+                    model = ResNet32_1d(input_channels=input_channels, seq_length=seq_length, num_classes=2)
+                elif model_type == 'BiLSTM':
+                    if 'TBM' in dataset_name:
+                        # BiLSTM需要输入为(batch, seq_len, features)
+                        input_size = input_channels  # 特征数为通道数
+                        hidden_size = 128
+                        num_layers = 2
+                        model = BiLSTM(input_size, hidden_size, num_layers, num_classes=2)
+                    else:
+                        # 对于图像数据，把它当作一个序列
+                        input_size = seq_length  # 每一行作为一个时间步的特征
+                        hidden_size = 128
+                        num_layers = 2
+                        model = BiLSTM(input_size, hidden_size, num_layers, num_classes=2)
+                elif model_type == 'Transformer':
+                    model = create_transformer(input_dim=input_channels, seq_length=seq_length, num_classes=2)
+                else:
+                    raise ValueError(f"不支持的模型类型: {model_type}")
+                
+                # 训练模型
+                print("\n开始训练过程...")
+                start_time = time.time()
+                
+                trained_model = train_model(model, train_loader, val_loader, test_loader, config, dataset_obj=dataset)
+                
+                # 打印训练时间
+                training_time = time.time() - start_time
+                print(f"\n训练完成! 总用时: {training_time:.2f} 秒")
+                
+                # 最终评估 - 只在这里保存混淆矩阵
+                print("\n进行最终评估...")
+                metrics = evaluate_model(
+                    trained_model, 
+                    test_loader, 
+                    save_dir=config['save_dir'],  # 只在最终评估保存混淆矩阵
+                    dataset_name=config['dataset_name'],
+                    rho=config['rho'],
+                    dataset_obj=dataset,
+                    run_number=config['run_number'],
+                    model_type=config['model_type'],
+                    is_final=True  # 标记这是最终评估
+                )
+                
+                print("\n===== 最终评估结果 =====")
+                for metric_name, metric_value in metrics.items():
+                    print(f"{metric_name}: {metric_value:.4f}")
+                
+                # 释放内存
+                del model, trained_model
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            
+            # 释放数据集内存
+            del dataset, train_loader, val_loader, test_loader
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
@@ -402,6 +438,53 @@ def get_recommended_epochs(dataset_name, model_type, rho):
             'Transformer': 120,
         },
     }
+    
+    # 为所有SNR变体数据集添加配置
+    snr_datasets = {
+        'TBM_K_M_Noise_snr_3': {
+            'ResNet32_1d': 80,
+            'BiLSTM': 90,
+            'Transformer': 120,
+        },
+        'TBM_K_M_Noise_snr_1': {
+            'ResNet32_1d': 85,
+            'BiLSTM': 95,
+            'Transformer': 125,
+        },
+        'TBM_K_M_Noise_snr_0': {
+            'ResNet32_1d': 90,
+            'BiLSTM': 100,
+            'Transformer': 130,
+        },
+        'TBM_K_M_Noise_snr_-1': {
+            'ResNet32_1d': 95,
+            'BiLSTM': 105,
+            'Transformer': 135,
+        },
+        'TBM_K_M_Noise_snr_-3': {
+            'ResNet32_1d': 100,
+            'BiLSTM': 110,
+            'Transformer': 140,
+        },
+        'TBM_K_M_Noise_snr_-5': {
+            'ResNet32_1d': 105,
+            'BiLSTM': 115,
+            'Transformer': 145,
+        },
+        'TBM_K_M_Noise_snr_-7': {
+            'ResNet32_1d': 110,
+            'BiLSTM': 120,
+            'Transformer': 150,
+        },
+        'TBM_K_M_Noise_snr_-10': {
+            'ResNet32_1d': 120,
+            'BiLSTM': 130,
+            'Transformer': 160,
+        },
+    }
+    
+    # 合并所有数据集配置
+    base_epochs.update(snr_datasets)
     
     # 获取基础轮数
     if dataset_name in base_epochs and model_type in base_epochs[dataset_name]:

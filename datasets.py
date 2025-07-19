@@ -200,6 +200,118 @@ class ImbalancedDataset:
             test_set = self._create_dataset_from_arrays(test_data, test_labels)
             
             return train_set, test_set
+        elif self.dataset_name == "TBM_K_M_Noise_snr_3":
+            self.positive_classes = [1, 2, 3, 4, 5, 6, 7, 8]
+            self.negative_classes = [0]
+            
+            print("正在加载TBM_K_M_Noise_snr_3训练集...")
+            train_data, train_labels = self._load_h5_file('/datasets/TBM/train_data/data/train_dataset_noisy_0.3_1024_512_standard_snr3_prob0.3_amp0.05.h5')
+            
+            print("正在加载TBM_K_M_Noise_snr_3测试集...")
+            test_data, test_labels = self._load_h5_file('/datasets/TBM/train_data/data/test_dataset_noisy_0.3_1024_512_standard_snr3_prob0.3_amp0.05.h5')
+            
+            train_set = self._create_dataset_from_arrays(train_data, train_labels)
+            test_set = self._create_dataset_from_arrays(test_data, test_labels)
+            
+            return train_set, test_set
+        elif self.dataset_name == "TBM_K_M_Noise_snr_1":
+            self.positive_classes = [1, 2, 3, 4, 5, 6, 7, 8]
+            self.negative_classes = [0]
+            
+            print("正在加载TBM_K_M_Noise_snr_1训练集...")
+            train_data, train_labels = self._load_h5_file('/datasets/TBM/train_data/data/train_dataset_noisy_0.3_1024_512_standard_snr1_prob0.3_amp0.05.h5')
+            
+            print("正在加载TBM_K_M_Noise_snr_1测试集...")
+            test_data, test_labels = self._load_h5_file('/datasets/TBM/train_data/data/test_dataset_noisy_0.3_1024_512_standard_snr1_prob0.3_amp0.05.h5')
+            
+            train_set = self._create_dataset_from_arrays(train_data, train_labels)
+            test_set = self._create_dataset_from_arrays(test_data, test_labels)
+            
+            return train_set, test_set
+        elif self.dataset_name == "TBM_K_M_Noise_snr_0":
+            self.positive_classes = [1, 2, 3, 4, 5, 6, 7, 8]
+            self.negative_classes = [0]
+            
+            print("正在加载TBM_K_M_Noise_snr_0训练集...")
+            train_data, train_labels = self._load_h5_file('/datasets/TBM/train_data/data/train_dataset_noisy_0.3_1024_512_standard_snr0_prob0.3_amp0.05.h5')
+            
+            print("正在加载TBM_K_M_Noise_snr_0测试集...")
+            test_data, test_labels = self._load_h5_file('/datasets/TBM/train_data/data/test_dataset_noisy_0.3_1024_512_standard_snr0_prob0.3_amp0.05.h5')
+            
+            train_set = self._create_dataset_from_arrays(train_data, train_labels)
+            test_set = self._create_dataset_from_arrays(test_data, test_labels)
+            
+            return train_set, test_set
+        elif self.dataset_name == "TBM_K_M_Noise_snr_-1":
+            self.positive_classes = [1, 2, 3, 4, 5, 6, 7, 8]
+            self.negative_classes = [0]
+            
+            print("正在加载TBM_K_M_Noise_snr_-1训练集...")
+            train_data, train_labels = self._load_h5_file('/datasets/TBM/train_data/data/train_dataset_noisy_0.3_1024_512_standard_snr-1_prob0.3_amp0.05.h5')
+            
+            print("正在加载TBM_K_M_Noise_snr_-1测试集...")
+            test_data, test_labels = self._load_h5_file('/datasets/TBM/train_data/data/test_dataset_noisy_0.3_1024_512_standard_snr-1_prob0.3_amp0.05.h5')
+            
+            train_set = self._create_dataset_from_arrays(train_data, train_labels)
+            test_set = self._create_dataset_from_arrays(test_data, test_labels)
+            
+            return train_set, test_set
+        elif self.dataset_name == "TBM_K_M_Noise_snr_-3":
+            self.positive_classes = [1, 2, 3, 4, 5, 6, 7, 8]
+            self.negative_classes = [0]
+            
+            print("正在加载TBM_K_M_Noise_snr_-3训练集...")
+            train_data, train_labels = self._load_h5_file('/datasets/TBM/train_data/data/train_dataset_noisy_0.3_1024_512_standard_snr-3_prob0.3_amp0.05.h5')
+            
+            print("正在加载TBM_K_M_Noise_snr_-3测试集...")
+            test_data, test_labels = self._load_h5_file('/datasets/TBM/train_data/data/test_dataset_noisy_0.3_1024_512_standard_snr-3_prob0.3_amp0.05.h5')
+            
+            train_set = self._create_dataset_from_arrays(train_data, train_labels)
+            test_set = self._create_dataset_from_arrays(test_data, test_labels)
+            
+            return train_set, test_set
+        elif self.dataset_name == "TBM_K_M_Noise_snr_-5":
+            self.positive_classes = [1, 2, 3, 4, 5, 6, 7, 8]
+            self.negative_classes = [0]
+            
+            print("正在加载TBM_K_M_Noise_snr_-5训练集...")
+            train_data, train_labels = self._load_h5_file('/datasets/TBM/train_data/data/train_dataset_noisy_0.3_1024_512_standard_snr-5_prob0.3_amp0.05.h5')
+            
+            print("正在加载TBM_K_M_Noise_snr_-5测试集...")
+            test_data, test_labels = self._load_h5_file('/datasets/TBM/train_data/data/test_dataset_noisy_0.3_1024_512_standard_snr-5_prob0.3_amp0.05.h5')
+            
+            train_set = self._create_dataset_from_arrays(train_data, train_labels)
+            test_set = self._create_dataset_from_arrays(test_data, test_labels)
+            
+            return train_set, test_set
+        elif self.dataset_name == "TBM_K_M_Noise_snr_-7":
+            self.positive_classes = [1, 2, 3, 4, 5, 6, 7, 8]
+            self.negative_classes = [0]
+            
+            print("正在加载TBM_K_M_Noise_snr_-7训练集...")
+            train_data, train_labels = self._load_h5_file('/datasets/TBM/train_data/data/train_dataset_noisy_0.3_1024_512_standard_snr-7_prob0.3_amp0.05.h5')
+            
+            print("正在加载TBM_K_M_Noise_snr_-7测试集...")
+            test_data, test_labels = self._load_h5_file('/datasets/TBM/train_data/data/test_dataset_noisy_0.3_1024_512_standard_snr-7_prob0.3_amp0.05.h5')
+            
+            train_set = self._create_dataset_from_arrays(train_data, train_labels)
+            test_set = self._create_dataset_from_arrays(test_data, test_labels)
+            
+            return train_set, test_set
+        elif self.dataset_name == "TBM_K_M_Noise_snr_-10":
+            self.positive_classes = [1, 2, 3, 4, 5, 6, 7, 8]
+            self.negative_classes = [0]
+            
+            print("正在加载TBM_K_M_Noise_snr_-10训练集...")
+            train_data, train_labels = self._load_h5_file('/datasets/TBM/train_data/data/train_dataset_noisy_0.3_1024_512_standard_snr-10_prob0.3_amp0.05.h5')
+            
+            print("正在加载TBM_K_M_Noise_snr_-10测试集...")
+            test_data, test_labels = self._load_h5_file('/datasets/TBM/train_data/data/test_dataset_noisy_0.3_1024_512_standard_snr-10_prob0.3_amp0.05.h5')
+            
+            train_set = self._create_dataset_from_arrays(train_data, train_labels)
+            test_set = self._create_dataset_from_arrays(test_data, test_labels)
+            
+            return train_set, test_set
         else:
             raise ValueError(f"Unsupported dataset: {self.dataset_name}")
             
