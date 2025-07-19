@@ -509,4 +509,4 @@ def get_recommended_epochs(dataset_name, model_type, rho):
 if __name__ == "__main__":
     main()
 # python main.py --dataset TBM_K_M --rho 0.01 --val_ratio 0.2 --patience 10 --save_dir /root/autodl-tmp/results
-# python main.py --run_snr_experiments --rho 0.01 --val_ratio 0.2 --patience 10 --save_dir /workspace/RL/baseline/results
+# python /workspace/RL/baseline/main.py --run_snr_experiments --rho 0.01 --val_ratio 0.2 --patience 10 --save_dir /workspace/RL/baseline/results
