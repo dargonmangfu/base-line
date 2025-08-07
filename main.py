@@ -294,10 +294,15 @@ def main():
                 seq_length = 28  # MNIST的图像大小
             
             # 每个模型在每个数据集上训练两次
-            for run_number in range(1, 3):
+            for run_number in range(1, 11):
                 print(f"\n{'='*50}")
                 print(f"开始训练 {model_type} 模型在 {dataset_name} 数据集上 (第 {run_number} 次运行)")
                 print(f"{'='*50}\n")
+                
+                # 为每次运行设置不同的随机种子
+                current_seed = args.seed + run_number * 100  # 基于基础种子和运行次数生成新种子
+                set_seed(current_seed)
+                print(f"当前运行使用的随机种子: {current_seed}")
                 
                 # 创建配置字典
                 config = {
@@ -308,7 +313,7 @@ def main():
                     'learning_rate': model_params['learning_rate'],
                     'epochs': get_recommended_epochs(dataset_name, model_type, args.rho),
                     'eval_interval': args.eval_interval,
-                    'seed': args.seed,
+                    'seed': current_seed,  # 使用当前运行的随机种子
                     'device': device,
                     'save_dir': args.save_dir,
                     'run_number': run_number,
