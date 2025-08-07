@@ -162,9 +162,9 @@ class TransformerModel(nn.Module):
 
 def create_transformer(input_dim=3, seq_length=32, num_classes=10):
     """创建Transformer模型"""
-    d_model = 128  # 模型维度
-    nhead = 8  # 多头注意力的头数
-    num_encoder_layers = 6  # 编码器层数
+    d_model = 256  # 模型维度
+    nhead = 2  # 多头注意力的头数
+    num_encoder_layers = 3  # 编码器层数
     dim_feedforward = 512  # 前馈网络维度
     dropout = 0.1  # dropout率
     
